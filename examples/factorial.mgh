@@ -1,0 +1,5 @@
+-- factorial via let-rec and if
+let rec fact = \n ->
+  if iszero n then 1
+  else n * fact (pred n)
+in fact 5

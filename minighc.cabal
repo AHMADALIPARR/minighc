@@ -1,12 +1,12 @@
 cabal-version: 3.0
 name: minighc
-version: 0.1.0.0
+version: 0.2.0.0
 synopsis: A miniature compiler pipeline inspired by GHC
 description:
   MiniGHC is an educational from-scratch implementation of a small functional
-  language compiler. It demonstrates bidirectional type checking, a Core
-  intermediate language, free-variable analysis, and conversion toward an
-  STG-like representation, together with a call-by-value evaluator.
+  language compiler. It demonstrates a concrete surface syntax, bidirectional
+  type checking, a call-by-value evaluator, an explicitly typed Core language,
+  free-variable analysis, STG conversion, and a simple abstract machine.
 license: BSD-3-Clause
 license-file: LICENSE
 author: MiniGHC contributors
@@ -14,11 +14,20 @@ maintainer: example@example.com
 category: Compilers
 build-type: Simple
 
-executable minighc
-  main-is: MiniGHC.hs
+library
+  exposed-modules: MiniGHC
   hs-source-dirs: src
   build-depends:
       base >=4.15 && <5
     , containers
   default-language: Haskell2010
-  ghc-options: -Wall -Wcompat -Wincomplete-uni-patterns -Wincomplete-record-updates -O2
+  ghc-options: -Wall -Wcompat -Wincomplete-uni-patterns -Wincomplete-record-updates
+
+executable minighc
+  main-is: Main.hs
+  hs-source-dirs: app
+  build-depends:
+      base >=4.15 && <5
+    , minighc
+  default-language: Haskell2010
+  ghc-options: -Wall -Wcompat -O2

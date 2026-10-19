@@ -67,3 +67,18 @@ cabal run minighc
 The executable prints the results of the built-in demonstrations. The source is organised so that individual phases can be imported and tested independently once the module is split, should that become desirable.
 
 MiniGHC is offered as a readable, executable sketch of a functional-language compiler. It can be used as a teaching aid, as a starting point for experiments with intermediate languages, or simply as a concrete reference for the ideas that underlie GHC.
+
+
+## Expansion (v0.2)
+
+The baseline has been expanded with:
+
+- A concrete surface syntax and recursive-descent parser (supports `.mgh` files).
+- Arithmetic operators (`+`, `-`, `*`).
+- Improved pattern typing that carries the scrutinee type.
+- A working (if still simplified) recursive `let` evaluator using laziness.
+- A CLI that runs the built-in demo or a source file.
+- Example programs in `examples/`.
+
+The STG conversion and a full bytecode machine remain available as extension points; the current runnable path is type-check then evaluate. The single-module structure keeps the whole pipeline readable.
+

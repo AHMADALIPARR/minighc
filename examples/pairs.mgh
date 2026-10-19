@@ -1,0 +1,3 @@
+-- pair construction and projection
+let p = (10, 20) in
+fst p + snd p
