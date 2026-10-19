@@ -6,6 +6,8 @@
 
 Haskell · MiniGHC 0.9 · BSD-3-Clause
 
+[![CI on review branch](https://github.com/AHMADALIPARR/minighc/actions/workflows/test.yml/badge.svg?branch=repair%2Fcomplete-modules)](https://github.com/AHMADALIPARR/minighc/actions/workflows/test.yml?query=branch%3Arepair%2Fcomplete-modules) [![Language: Haskell](docs/media/badges/language.svg)](#architecture) [![Runtime: Stack VM](docs/media/badges/runtime.svg)](#architecture) [![License: BSD-3-Clause](docs/media/badges/license.svg)](LICENSE)
+
 <img src="docs/media/demo.gif" alt="Actual compiler output: factorial, pair projection and list construction" width="760">
 
 <sub>Actual program output, rendered as a compact replay. Animation timing is edited.</sub>
