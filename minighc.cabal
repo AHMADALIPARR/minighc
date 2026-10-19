@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: minighc
-version: 0.4.0.0
+version: 0.5.0.0
 synopsis: A miniature compiler pipeline inspired by GHC
 description:
   MiniGHC is a compiler for a small functional language together with
@@ -25,6 +25,8 @@ library
     , MiniGHC.Geometry.Umbral
     , MiniGHC.Geometry.Grassmann
     , MiniGHC.Geometry.Schubert
+    , MiniGHC.Operators
+    , MiniGHC.Operators.Heaviside
   hs-source-dirs: src
   build-depends:
       base >=4.15 && <5

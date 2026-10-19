@@ -107,3 +107,8 @@ Hand-rolled implementations of three classical calculi:
 - **Schubert Enumerative Calculus** (`MiniGHC.Geometry.Schubert`) — Schubert symbols, the Pieri rule, and special Schubert cycles.
 
 These modules are independent of the compiler pipeline and may be imported directly.
+
+
+## Operational calculus
+
+- **Heaviside operational calculus** (`MiniGHC.Operators.Heaviside`) — algebraic manipulation of the differential operator \( p = d/dt \). Rational functions of \( p \) are expanded by Heaviside’s theorem and applied to step inputs, reproducing the technique Heaviside used for circuit and transmission-line problems before a rigorous foundation existed.
