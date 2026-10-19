@@ -20,6 +20,7 @@ library
     , MiniGHC.Calculi.STLC
     , MiniGHC.Calculi.SystemF
     , MiniGHC.Calculi.HM
+    , MiniGHC.Lint
   hs-source-dirs: src
   build-depends:
       base >=4.15 && <5

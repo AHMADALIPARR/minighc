@@ -85,3 +85,14 @@ The compiler implements the phases listed above. Natural extensions that build d
 ## License
 
 BSD-3-Clause. See `LICENSE`.
+
+
+## Linter
+
+A built-in linter reuses the parser and type checker and reports additional static issues (unused bindings, parse/type errors).
+
+```sh
+cabal run minighc -- --lint examples/factorial.mgh
+```
+
+The linter runs automatically on every push and pull request via GitHub Actions (`.github/workflows/lint.yml`).

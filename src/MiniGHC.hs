@@ -51,6 +51,8 @@ module MiniGHC
   , synth
   , eval
   , parseTerm
+  , Tm(..)
+  , Pat(..)
   ) where
 
 import Data.Maybe (fromMaybe, mapMaybe, isJust)
