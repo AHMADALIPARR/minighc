@@ -1,0 +1,5 @@
+
+--- examples/factorial.mgh ---
+parsed: LetRec [("fact",Lam "n" (If (IsZero (Var "n")) (LitNat 1) (Mul (Var "n") (App (Var "fact") (Pred (Var "n"))))))] (App (Var "fact") (LitNat 5))
+type: TNat
+value: VNat 120

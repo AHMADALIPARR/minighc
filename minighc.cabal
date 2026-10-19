@@ -7,8 +7,8 @@ description:
   bidirectional type checker, evaluator, Core IR, and free-variable analysis.
 license: BSD-3-Clause
 license-file: LICENSE
-author: MiniGHC contributors
-maintainer: example@example.com
+author: Ahmad Ali Parr, MiniGHC contributors
+maintainer: ahmad.parr@snapkittywest.com
 category: Compilers
 build-type: Simple
 
@@ -16,6 +16,19 @@ library
   exposed-modules:
       MiniGHC
     , MiniGHC.Lint
+    , MiniGHC.Analysis
+    , MiniGHC.Analysis.Complex
+    , MiniGHC.Calculi
+    , MiniGHC.Calculi.HM
+    , MiniGHC.Calculi.STLC
+    , MiniGHC.Calculi.SystemF
+    , MiniGHC.Geometry
+    , MiniGHC.Geometry.Grassmann
+    , MiniGHC.Geometry.Schubert
+    , MiniGHC.Geometry.Umbral
+    , MiniGHC.Operators
+    , MiniGHC.Operators.Heaviside
+    , MiniGHC.Operators.Quaternion
   hs-source-dirs: src
   build-depends:
       base >=4.15 && <5

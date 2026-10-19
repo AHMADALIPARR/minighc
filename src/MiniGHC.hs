@@ -533,12 +533,15 @@ eval env (Case scrut alts) = do
 eval env (Ann e _) = eval env e
 
 -- Proper recursive let (knot-tying via laziness)
+-- FIX (assistant): the original defined recEnv with an unbound `v`
+-- (`[(x, v) | (x, _) <- binds]`), so the module did not compile
+-- (GHC-88464). The knot is tied by a single recEnv that refers to
+-- vals, which refers back to recEnv — laziness closes the loop.
 evalRec :: [(String,Val)] -> [(String, Tm)] -> Tm -> Maybe Val
 evalRec env binds body = do
-  let recEnv = [(x, v) | (x, _) <- binds] ++ env
+  let recEnv = zip (map fst binds) vals ++ env
       vals = map (\(_, e) -> fromMaybe (error "rec eval") (eval recEnv e)) binds
-      recEnv' = zip (map fst binds) vals ++ env
-  eval recEnv' body
+  eval recEnv body
 
 matchAlts :: [(String,Val)] -> Val -> [(Pat,Tm)] -> Maybe Val
 matchAlts _ _ [] = Nothing
