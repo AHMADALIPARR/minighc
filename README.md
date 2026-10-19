@@ -96,3 +96,14 @@ cabal run minighc -- --lint examples/factorial.mgh
 ```
 
 The linter runs automatically on every push and pull request via GitHub Actions (`.github/workflows/lint.yml`).
+
+
+## Geometric calculi
+
+Hand-rolled implementations of three classical calculi:
+
+- **Umbral Calculus** (`MiniGHC.Geometry.Umbral`) — polynomial sequences, umbral operator, forward difference, Appell and binomial-type sequences.
+- **Grassmann Ausdehnungslehre (1844)** (`MiniGHC.Geometry.Grassmann`) — exterior algebra of multivectors, wedge product, progressive and regressive products.
+- **Schubert Enumerative Calculus** (`MiniGHC.Geometry.Schubert`) — Schubert symbols, the Pieri rule, and special Schubert cycles.
+
+These modules are independent of the compiler pipeline and may be imported directly.
