@@ -1,12 +1,11 @@
 cabal-version: 3.0
 name: minighc
-version: 0.2.0.0
+version: 0.3.0.0
 synopsis: A miniature compiler pipeline inspired by GHC
 description:
-  MiniGHC is an educational from-scratch implementation of a small functional
-  language compiler. It demonstrates a concrete surface syntax, bidirectional
-  type checking, a call-by-value evaluator, an explicitly typed Core language,
-  free-variable analysis, STG conversion, and a simple abstract machine.
+  MiniGHC is a compiler for a small functional language together with
+  implementations of the classic lambda calculi (STLC, System F, Hindley–Milner)
+  that underlie its design.
 license: BSD-3-Clause
 license-file: LICENSE
 author: MiniGHC contributors
@@ -15,7 +14,12 @@ category: Compilers
 build-type: Simple
 
 library
-  exposed-modules: MiniGHC
+  exposed-modules:
+      MiniGHC
+    , MiniGHC.Calculi
+    , MiniGHC.Calculi.STLC
+    , MiniGHC.Calculi.SystemF
+    , MiniGHC.Calculi.HM
   hs-source-dirs: src
   build-depends:
       base >=4.15 && <5

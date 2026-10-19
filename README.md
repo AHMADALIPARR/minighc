@@ -59,3 +59,14 @@ The compiler implements the phases listed above. Areas that remain open for exte
 - Additional optimising passes over Core
 
 These are ordinary next steps for the existing intermediate representations, not missing infrastructure.
+
+
+## Classic calculi
+
+The package also contains independent implementations of the lambda calculi that form the theoretical foundation of the language and of GHC’s intermediate representations:
+
+- **Simply-typed lambda calculus** (`MiniGHC.Calculi.STLC`) — syntax, bidirectional type checker, evaluator.
+- **System F** (`MiniGHC.Calculi.SystemF`) — polymorphic lambda calculus with type abstraction and application, including type substitution.
+- **Hindley–Milner fragment** (`MiniGHC.Calculi.HM`) — a small inference implementation illustrating the classic constraint-generation structure.
+
+These modules are self-contained and can be used or extended independently of the main compiler pipeline.
