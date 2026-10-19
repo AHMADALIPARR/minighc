@@ -112,3 +112,8 @@ These modules are independent of the compiler pipeline and may be imported direc
 ## Operational calculus
 
 - **Heaviside operational calculus** (`MiniGHC.Operators.Heaviside`) — algebraic manipulation of the differential operator \( p = d/dt \). Rational functions of \( p \) are expanded by Heaviside’s theorem and applied to step inputs, reproducing the technique Heaviside used for circuit and transmission-line problems before a rigorous foundation existed.
+
+
+## Calculus of imaginary quantities
+
+- **Complex-variable calculus** (`MiniGHC.Analysis.Complex`) — hand-rolled complex numbers, magnitude and argument, residue at simple poles, polygonal contour integration, and Cauchy’s integral formula.
