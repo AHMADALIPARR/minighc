@@ -56,6 +56,7 @@ module MiniGHC
   ) where
 
 import Data.Maybe (fromMaybe)
+import Control.Applicative ((<|>))
 import Control.Monad (guard)
 import Data.List (nub)
 import Data.Set (Set)
