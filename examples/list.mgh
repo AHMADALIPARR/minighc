@@ -1,7 +1,2 @@
--- simple list via constructors
-let rec sum = \xs ->
-  case xs of
-    Nil -> 0
-    Cons x ys -> x + sum ys
-in
-sum (Cons 1 (Cons 2 (Cons 3 Nil)))
+let xs = Cons 1 (Cons 2 Nil) in
+xs

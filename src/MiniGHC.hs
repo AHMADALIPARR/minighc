@@ -55,11 +55,9 @@ module MiniGHC
   , Pat(..)
   ) where
 
-import Data.Maybe (fromMaybe, mapMaybe, isJust)
-import Control.Monad (guard, when)
-import Data.List (nub, (\\), intercalate, find)
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
+import Data.Maybe (fromMaybe)
+import Control.Monad (guard)
+import Data.List (nub)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Char (isAlpha, isAlphaNum, isDigit, isSpace)
