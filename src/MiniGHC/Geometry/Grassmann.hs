@@ -52,11 +52,17 @@ progressive = exterior   -- progressive product coincides with exterior for comp
 
 -- | Regressive product (join, dual of exterior).
 regressive :: Int -> MultiVector -> MultiVector -> MultiVector
-regressive n a b = dual n (exterior (dual n a) (dual n b))
+regressive n a b = undual n (exterior (dual n a) (dual n b))
   where
-    dual dim mv = Map.mapKeys (complement dim) mv
+    dual dim mv = Map.fromListWith (+)
+      [(complement dim blade,ca * orientation blade (complement dim blade)) | (blade,ca)<-Map.toList mv]
+    undual dim mv = Map.fromListWith (+)
+      [(complement dim blade,ca * orientation (complement dim blade) blade) | (blade,ca)<-Map.toList mv]
     complement dim blade = [i | i <- [1..dim], i `notElem` blade]
+    orientation xs ys = if even (length [() | x<-xs,y<-ys,x>y]) then 1 else -1
 
 -- | Unit basis blade.
 basis :: [Int] -> MultiVector
-basis b = Map.singleton (sort b) 1
+basis b
+  | length (nub b)/=length b=Map.empty
+  | otherwise=Map.singleton (sort b) (if even (length [() | (i,x)<-zip [0..] b,y<-drop (i+1) b,x>y]) then 1 else -1)

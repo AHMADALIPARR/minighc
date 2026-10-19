@@ -47,7 +47,7 @@ formatLint path (LintResult errs warns) =
   in unlines (header : errLines ++ warnLines)
 
 findUnused :: Tm -> [String]
-findUnused tm = Set.toList (bound tm `Set.difference` free tm)
+findUnused tm = Set.toList (Set.fromList (walk tm))
   where
     free :: Tm -> Set String
     free (Var x) = Set.singleton x
@@ -75,16 +75,30 @@ findUnused tm = Set.toList (bound tm `Set.difference` free tm)
 
     freeAlt (p, r) = free r Set.\\ patBinders p
 
-    bound :: Tm -> Set String
-    bound (Let x _ b) = Set.singleton x `Set.union` bound b
-    bound (LetRec bs b) = Set.fromList (map fst bs) `Set.union` bound b
-    bound (Lam _ b) = bound b
-    bound (App f a) = bound f `Set.union` bound a
-    bound (If c t e) = bound c `Set.union` bound t `Set.union` bound e
-    bound (Pair a b) = bound a `Set.union` bound b
-    bound (Case s alts) = bound s `Set.union` foldr (Set.union . bound . snd) Set.empty alts
-    bound (Ann e _) = bound e
-    bound _ = Set.empty
+    walk (Let x e b) = [x | x `Set.notMember` free b] ++ walk e ++ walk b
+    walk (LetRec bs b) =
+      let names=Set.fromList (map fst bs)
+          reach seen = let more=Set.unions [free rhs | (x,rhs)<-bs,x `Set.member` seen] `Set.intersection` names
+                           next=seen `Set.union` more
+                       in if next==seen then seen else reach next
+          live=reach (free b `Set.intersection` names)
+      in Set.toList (names Set.\\ live) ++ concatMap (walk.snd) bs ++ walk b
+    walk (Lam x b) = [x | x `Set.notMember` free b] ++ walk b
+    walk (App a b) = walk a ++ walk b
+    walk (If a b c) = walk a ++ walk b ++ walk c
+    walk (Pair a b) = walk a ++ walk b
+    walk (Case s alts) = walk s ++ concat [Set.toList (patBinders p Set.\\ free rhs) ++ walk rhs | (p,rhs)<-alts]
+    walk (Con _ xs) = concatMap walk xs
+    walk (Fst e) = walk e
+    walk (Snd e) = walk e
+    walk (Succ e) = walk e
+    walk (Pred e) = walk e
+    walk (IsZero e) = walk e
+    walk (Add a b) = walk a ++ walk b
+    walk (Sub a b) = walk a ++ walk b
+    walk (Mul a b) = walk a ++ walk b
+    walk (Ann e _) = walk e
+    walk _ = []
 
     patBinders :: Pat -> Set String
     patBinders (PVar x) = Set.singleton x

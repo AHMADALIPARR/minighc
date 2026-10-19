@@ -3,51 +3,21 @@ Copyright (c) 2026, MiniGHC contributors
 All rights reserved. See LICENSE.
 -}
 
--- | Hand-rolled Umbral Calculus.
---
--- Core notions: polynomial sequences, the umbral operator,
--- forward difference, and Sheffer sequences (Appell / binomial type).
-
 module MiniGHC.Geometry.Umbral
-  ( Poly
-  , umbral
-  , forwardDiff
-  , appell
-  , binomialType
-  , evalPoly
-  ) where
-
-import Data.List (foldl')
-
--- | Dense polynomial, lowest degree first.
-type Poly = [Rational]
-
--- | Umbral substitution: replace x^n by a sequence a_n.
+  ( Poly, umbral, forwardDiff, appell, binomialType, evalPoly ) where
+import MiniGHC.Polynomial (Poly)
+import qualified MiniGHC.Polynomial as P
 umbral :: [Rational] -> Poly -> Rational
 umbral aseq p = sum (zipWith (*) p (aseq ++ repeat 0))
-
--- | Forward difference operator Δp(x) = p(x+1) - p(x).
+-- Compose with x+1 by Horner's rule, then subtract p(x).
 forwardDiff :: Poly -> Poly
-forwardDiff p = zipWith (-) (shift p) p
-  where
-    shift q = 0 : q   -- approximate; exact shift needs binomial expansion
-
--- | Appell sequence: p_n'(x) = n p_{n-1}(x).
+forwardDiff p = P.sub (foldr (\c q -> P.add [c] (P.mul [1,1] q)) [] p) p
+-- Monomial Appell sequence, p_0=1 and p_n(0)=0 for n>0.
 appell :: Int -> Poly
-appell 0 = [1]
-appell n = integrate (fromIntegral n * head (appell (n-1)) : tail (appell (n-1)))
-  where
-    integrate q = 0 : zipWith (/) q [1..]
-
--- | Binomial-type sequence (basic example: falling factorials).
+appell n | n < 0 = error "negative polynomial degree"
+         | otherwise = replicate n 0 ++ [1]
 binomialType :: Int -> Poly
-binomialType n = falling n
-  where
-    falling 0 = [1]
-    falling k = multiply [0,1] (falling (k-1))   -- x(x-1)... rough
-    multiply a b = foldl' addShift [] (zip [0..] a)
-      where
-        addShift acc (i, c) = zipWith (+) (acc ++ repeat 0) (replicate i 0 ++ map (*c) b)
-
+binomialType n | n < 0 = error "negative polynomial degree"
+              | otherwise = foldl P.mul [1] [[negate (fromIntegral k),1] | k <- [0..n-1]]
 evalPoly :: Poly -> Rational -> Rational
-evalPoly p x = foldr (\c acc -> c + x * acc) 0 (reverse p)
+evalPoly = P.eval

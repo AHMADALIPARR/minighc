@@ -6,12 +6,11 @@ All rights reserved. See LICENSE.
 {-# LANGUAGE StrictData #-}
 
 -- | Quaternion state vectors and the Hamilton product,
--- with Liquid Haskell refinements encoding the
--- norm-multiplicativity theorem:
+-- with refinement specifications for the ideal arithmetic identity:
 --
 --   |q1 * q2| = |q1| * |q2|
 --
--- (Unit quaternions are closed under the product.)
+-- Runtime Double arithmetic is rounded; isUnit uses a tolerance.
 
 module MiniGHC.Operators.Quaternion
   ( QState(..)

@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: minighc
-version: 0.8.0.0
+version: 0.9.0.0
 synopsis: A miniature compiler for a small functional language
 description:
   MiniGHC is a compiler for a small functional language with a
@@ -29,9 +29,10 @@ library
     , MiniGHC.Operators
     , MiniGHC.Operators.Heaviside
     , MiniGHC.Operators.Quaternion
+    , MiniGHC.Polynomial
   hs-source-dirs: src
   build-depends:
-      base >=4.15 && <5
+      base >=4.13 && <5
     , containers
   default-language: Haskell2010
   ghc-options: -Wall -Wcompat
@@ -40,7 +41,18 @@ executable minighc
   main-is: Main.hs
   hs-source-dirs: app
   build-depends:
-      base >=4.15 && <5
+      base >=4.13 && <5
     , minighc
   default-language: Haskell2010
-  ghc-options: -Wall -Wcompat -O2
+  ghc-options: -Wall -Wcompat
+
+test-suite regression
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  hs-source-dirs: test
+  build-depends: base >=4.13 && <5, containers, minighc
+  default-language: Haskell2010
+
+source-repository head
+  type: git
+  location: https://github.com/AHMADALIPARR/minighc.git

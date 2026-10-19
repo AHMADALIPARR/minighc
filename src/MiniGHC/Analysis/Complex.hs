@@ -17,6 +17,7 @@ module MiniGHC.Analysis.Complex
   , magnitude
   , argument
   , residue
+  , residueWithDerivative
   , contourIntegral
   , cauchyIntegral
   ) where
@@ -67,10 +68,15 @@ residue num den z0 =
   let dden = deriv den
   in num z0 / dden z0
   where
-    deriv f = \z -> (f (z + C (1%1000) 0) - f z) * C 1000 0   -- numeric
+    deriv f = \z -> (f (z + C (1%1000000) 0) - f (z - C (1%1000000) 0)) / C (2%1000000) 0
+
+-- Exact when the supplied derivative and numerator are exact at a simple pole.
+residueWithDerivative :: (Complex -> Complex) -> (Complex -> Complex) -> Complex -> Complex
+residueWithDerivative num denDerivative z0 = num z0 / denDerivative z0
 
 -- | Contour integral over a closed polygonal path (trapezoid rule).
 contourIntegral :: (Complex -> Complex) -> [Complex] -> Complex
+contourIntegral _ [] = 0
 contourIntegral f path =
   sum (zipWith segment path (tail path ++ [head path]))
   where
