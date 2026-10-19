@@ -474,7 +474,15 @@ data Val
   | VPair Val Val
   | VCon String [Val]
   | VRec [(String, Val)] String   -- recursive closure marker (simplified)
-  deriving Show
+
+instance Show Val where
+  show (VNat n) = "VNat " ++ show n
+  show (VBool b) = "VBool " ++ show b
+  show VUnit = "VUnit"
+  show (VLam _) = "VLam <fun>"
+  show (VPair a b) = "VPair (" ++ show a ++ ") (" ++ show b ++ ")"
+  show (VCon c vs) = "VCon " ++ c ++ " " ++ show vs
+  show (VRec _ s) = "VRec " ++ s
 
 eval :: [(String,Val)] -> Tm -> Maybe Val
 eval env (Var x) = lookup x env
