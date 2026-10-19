@@ -1,55 +1,63 @@
 # MiniGHC
 
-MiniGHC is a compiler for a small functional language. It implements a concrete surface syntax, a bidirectional type checker, a call-by-value evaluator, an explicitly typed Core intermediate language with free-variable analysis, and an STG-shaped representation. A separate directory contains hand-rolled implementations of classical mathematical calculi that are independent of the compiler.
+A small functional-language compiler written in Haskell. The implementation is organised as a sequence of explicit intermediate representations, each with its own data type and transformation. Companion mathematical libraries live in a separate directory and are not part of the compiler build.
 
-The project is organised as a Cabal library and executable. Source programs use the extension `.mgh`.
+## Overview
 
-## Language
+MiniGHC accepts source files with the extension `.mgh`, type-checks them with a bidirectional checker, and evaluates them with a call-by-value interpreter. The same terms can be lowered through an explicitly typed Core language and an STG-shaped representation.
 
-The surface language provides:
+The package is a Cabal library plus an executable. The library exposes the compiler and a linter; the executable provides a command-line interface.
 
-- Base types: natural numbers, Booleans, and unit
-- Function types and pairs
-- Algebraic data types via constructors (`Z`/`S`, `Nil`/`Cons`, and others)
-- Lambda abstraction and application
-- Non-recursive and recursive `let`
-- Conditionals
-- Arithmetic operators (`+`, `-`, `*`) and the primitives `succ`, `pred`, `iszero`
-- Case analysis with patterns (variables, constructors, integer literals, pairs, unit, wildcards)
-- Type ascriptions
+## Surface language
 
-A recursive-descent parser translates concrete syntax into the abstract syntax defined by `Tm` and `Pat`.
+The language is defined by the types `Ty` and `Tm` in `src/MiniGHC.hs`.
 
-## Compiler pipeline
+Types are natural numbers, Booleans, unit, function types, pairs, and algebraic data types of the form `TData name arguments`. Terms include variables, lambda abstraction, application, integer and Boolean literals, unit, the Peano primitives `succ`/`pred`/`iszero`, arithmetic operators, conditionals, non-recursive and recursive `let`, pairs and projections, data constructors, case analysis, and type ascriptions.
 
-The compiler proceeds through the following phases, all implemented in `src/MiniGHC.hs`:
+Patterns support variables, constructors, integer literals, nested pairs, unit, and wildcards.
 
-1. **Lexer and parser**  
-   Source text is tokenised and parsed into the internal term representation.
+## Section 1 — Lexer and parser
 
-2. **Bidirectional type checking**  
-   Synthesis (`synth`) produces a type from a term in a context. Checking (`check`) verifies a term against an expected type. Introduction forms are checked; elimination forms synthesise. Pattern matching extends the context via `patCtx`, which carries the type of the scrutinee. Recursive bindings currently receive a monomorphic arrow type.
+Concrete syntax is handled by a hand-written lexer and a recursive-descent parser, both in `src/MiniGHC.hs`.
 
-3. **Evaluation**  
-   Well-typed terms are evaluated by a call-by-value interpreter. Recursive `let` bindings are tied using laziness.
+The lexer produces a token stream. The parser is a `newtype` over `[Token] -> Either String (a, [Token])` with `Functor`, `Applicative`, `Monad`, and `Alternative` instances. It supports `let`/`let rec`, `if`/`then`/`else`, `case`/`of`, lambda abstraction, application, pairs, arithmetic operators with precedence, and the built-in primitives.
 
-4. **Core**  
-   Terms are desugared into an explicitly typed Core language. Free-variable analysis over Core provides the information required for closure conversion.
+The entry point is `parseTerm :: String -> Either String Tm`.
 
-5. **STG**  
-   Core is converted to an STG-like form in which every lambda is a closure and applications follow the shape expected by an STG machine. This representation is the natural starting point for a bytecode or native backend.
+## Section 2 — Bidirectional type checking
 
-The default execution path type-checks a program and then evaluates it. The Core and STG representations are available for further passes.
+Type checking is split into synthesis and checking, following the classic bidirectional discipline.
 
-## Linter
+- `synth :: Ctx -> Tm -> Maybe Ty` produces a type from a term.
+- `check :: Ctx -> Tm -> Ty -> Maybe ()` verifies a term against an expected type.
 
-`src/MiniGHC/Lint.hs` reuses the parser and type checker and reports additional static issues, including unused bindings.
+Introduction forms (lambda, pair construction, unit) are checked. Elimination forms (application, projections, case) synthesise. Pattern matching extends the context through `patCtx`, which receives the type of the scrutinee and binds variables accordingly. Recursive bindings are currently assigned a monomorphic arrow type.
 
-```sh
-cabal run minighc -- --lint examples/factorial.mgh
-```
+## Section 3 — Evaluation
 
-## Building and running
+A call-by-value interpreter evaluates well-typed terms. Values are numbers, Booleans, unit, closures, pairs, and constructor applications.
+
+Recursive `let` is implemented by knot-tying: the bindings are evaluated in an environment that already contains the recursive values, relying on laziness. The entry point is `eval :: [(String, Val)] -> Tm -> Maybe Val`.
+
+## Section 4 — Core intermediate language
+
+After type checking, terms are desugared into `Core`, an explicitly typed lambda calculus that retains constructors, case, pairs, and primitive operations. The translation is mostly structure-preserving.
+
+Free-variable analysis (`freeVarsCore`) walks Core terms while tracking bound variables. The result is used by later phases to determine which variables must be captured by a closure.
+
+## Section 5 — STG-shaped representation
+
+Core can be converted to an STG-like form in which every lambda is a closure and applications are restricted to the shape expected by an STG machine. The conversion computes free variables and builds explicit closures. This representation is the intended starting point for a bytecode or native backend; the current default path is type-check then evaluate.
+
+## Section 6 — Linter
+
+`src/MiniGHC/Lint.hs` reuses the parser and type checker. It reports parse errors, type errors, and unused bindings discovered by a simple free/bound analysis. The command-line interface accepts `--lint FILE.mgh`.
+
+## Section 7 — Command-line interface
+
+`app/Main.hs` is the executable entry point. With no arguments it runs built-in demonstrations. With a file path it parses, type-checks, and evaluates the file. With `--lint` it invokes the linter.
+
+## Building
 
 Requires GHC 9.2 or later and Cabal.
 
@@ -57,43 +65,46 @@ Requires GHC 9.2 or later and Cabal.
 cabal build
 cabal run minighc
 cabal run minighc -- examples/factorial.mgh
-cabal run minighc -- examples/pairs.mgh
-cabal run minighc -- examples/list.mgh
+cabal run minighc -- --lint examples/pairs.mgh
 ```
 
-## Project layout
+## Examples
 
-```
-src/MiniGHC.hs          core compiler (parser, type checker, evaluator, Core, STG)
-src/MiniGHC/Lint.hs     linter
-app/Main.hs             executable entry point
-examples/               sample .mgh programs
-math/                   companion mathematical libraries (not part of the build)
-minighc.cabal           package description
-```
+The `examples/` directory contains small programs:
+
+- `factorial.mgh` — recursive factorial using `let rec` and arithmetic
+- `pairs.mgh` — pair construction and projection
+- `list.mgh` — construction of a list via constructors
 
 ## Companion mathematics
 
-The `math/` directory contains independent, hand-rolled implementations of classical calculi. These modules are not part of the compiler build:
+The `math/` directory holds independent implementations that are not compiled as part of the MiniGHC library:
 
-- **Umbral Calculus** (`math/Geometry/Umbral.hs`) — polynomial sequences, umbral operator, forward difference, Appell and binomial-type sequences
-- **Grassmann Ausdehnungslehre (1844)** (`math/Geometry/Grassmann.hs`) — multivectors, exterior product, progressive and regressive products
-- **Schubert Enumerative Calculus** (`math/Geometry/Schubert.hs`) — Schubert symbols and the Pieri rule
-- **Heaviside operational calculus** (`math/Operators/Heaviside.hs`) — algebraic manipulation of the differential operator \( p = d/dt \)
-- **Complex-variable calculus** (`math/Analysis/Complex.hs`) — complex numbers, residues, contour integration, Cauchy’s integral formula
-- **Quaternions** (`math/Operators/Quaternion.hs`) — Hamilton product with Liquid Haskell refinements for norm multiplicativity
-- **Simply-typed lambda calculus** (`math/Calculi/STLC.hs`)
-- **System F** (`math/Calculi/SystemF.hs`)
-- **Hindley–Milner fragment** (`math/Calculi/HM.hs`)
+| Module | Content |
+| --- | --- |
+| `math/Geometry/Umbral.hs` | Umbral calculus: polynomial sequences, umbral operator, forward difference, Appell and binomial-type sequences |
+| `math/Geometry/Grassmann.hs` | Grassmann’s Ausdehnungslehre (1844): multivectors, exterior product, progressive and regressive products |
+| `math/Geometry/Schubert.hs` | Schubert enumerative calculus: Schubert symbols and the Pieri rule |
+| `math/Operators/Heaviside.hs` | Heaviside operational calculus: algebraic treatment of the differential operator \( p = d/dt \), expansion theorem, simple circuit impedance |
+| `math/Analysis/Complex.hs` | Calculus of imaginary quantities: complex arithmetic, residues, polygonal contour integration, Cauchy’s integral formula |
+| `math/Operators/Quaternion.hs` | Quaternion state vectors and the Hamilton product, with Liquid Haskell refinements for norm multiplicativity |
+| `math/Calculi/STLC.hs` | Simply-typed lambda calculus with bidirectional checking and evaluation |
+| `math/Calculi/SystemF.hs` | System F with type abstraction, type application, and substitution |
+| `math/Calculi/HM.hs` | A small Hindley–Milner inference fragment |
 
-## Status
+These modules can be imported or extended independently of the compiler.
 
-The compiler implements the phases listed above. Natural extensions include:
+## Layout
 
-- Full Hindley–Milner inference for recursive groups
-- Source locations and structured diagnostics
-- Additional Core optimisation passes
-- A bytecode or Cmm-style backend driven from the STG representation
+```
+src/MiniGHC.hs          compiler (parser, type checker, evaluator, Core)
+src/MiniGHC/Lint.hs     linter
+app/Main.hs             executable
+examples/               sample programs
+math/                   companion mathematical libraries
+minighc.cabal           package description
+LICENSE                 BSD-3-Clause
+```
 
 ## License
 
