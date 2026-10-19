@@ -117,3 +117,11 @@ These modules are independent of the compiler pipeline and may be imported direc
 ## Calculus of imaginary quantities
 
 - **Complex-variable calculus** (`MiniGHC.Analysis.Complex`) — hand-rolled complex numbers, magnitude and argument, residue at simple poles, polygonal contour integration, and Cauchy’s integral formula.
+
+
+## Quaternion state and Liquid Haskell
+
+- **Hamilton product** (`MiniGHC.Operators.Quaternion`) — 4D state vector `(real, i, j, k)` with the non-commutative Hamilton product.
+- Liquid Haskell refinements encode the norm-multiplicativity theorem  
+  `|q1 * q2| = |q1| * |q2|`  
+  and the derived fact that unit quaternions are closed under the product.
