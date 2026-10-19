@@ -24,7 +24,7 @@ type Poly = [Rational]
 
 -- | Umbral substitution: replace x^n by a sequence a_n.
 umbral :: [Rational] -> Poly -> Rational
-umbral aseq p = sum (zipWith (*) p (seq ++ repeat 0))
+umbral aseq p = sum (zipWith (*) p (aseq ++ repeat 0))
 
 -- | Forward difference operator Δp(x) = p(x+1) - p(x).
 forwardDiff :: Poly -> Poly
