@@ -26,7 +26,7 @@ type SchubertSymbol = [Int]
 pieri :: SchubertSymbol -> Int -> [SchubertSymbol]
 pieri lambda k =
   nub $ sort $
-    [ sort (map (+d) lambda)
+    [ sort (zipWith (+) lambda d)
     | d <- compositions (length lambda) k
     , valid (zipWith (+) lambda d)
     ]

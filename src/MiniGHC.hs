@@ -112,8 +112,8 @@ data Pat
 
 data Token
   = TIdent String
-  | TNat Integer
-  | TBool Bool
+  | TokNat Integer
+  | TokBool Bool
   | TLam | TArrow | TDot
   | TLet | TRec | TIn
   | TIf | TThen | TElse
@@ -136,7 +136,7 @@ lexer = go
           go (dropWhile (/= '\n') cs)
       | isDigit c =
           let (ds, rest) = span isDigit (c:cs)
-          in TNat (read ds) : go rest
+          in TokNat (read ds) : go rest
       | isAlpha c || c == '_' =
           let (xs, rest) = span (\x -> isAlphaNum x || x == '_' || x == '\'') (c:cs)
           in keyword xs : go rest
@@ -162,8 +162,8 @@ keyword "then"   = TThen
 keyword "else"   = TElse
 keyword "case"   = TCase
 keyword "of"     = TOf
-keyword "true"   = TBool True
-keyword "false"  = TBool False
+keyword "true"   = TokBool True
+keyword "false"  = TokBool False
 keyword "()"     = TUnitTok
 keyword "succ"   = TSucc
 keyword "pred"   = TPred
@@ -302,8 +302,8 @@ pLit :: Parser Tm
 pLit = do
   t <- peek
   case t of
-    TNat n   -> eat (TNat n) >> pure (LitNat n)
-    TBool b  -> eat (TBool b) >> pure (LitBool b)
+    TokNat n   -> eat (TokNat n) >> pure (LitNat n)
+    TokBool b  -> eat (TokBool b) >> pure (LitBool b)
     TUnitTok -> eat TUnitTok >> pure Unit
     _        -> P $ \_ -> Left "not a literal"
 
@@ -353,7 +353,7 @@ pPat = pPVar <|> pPCon <|> pPLit <|> pPWild
     pPLit = do
       t <- peek
       case t of
-        TNat n -> eat (TNat n) >> pure (PLitNat n)
+        TokNat n -> eat (TokNat n) >> pure (PLitNat n)
         _ -> P $ \_ -> Left "pat lit"
     pPWild = eat (TIdent "_") >> pure PWild
 

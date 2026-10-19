@@ -48,6 +48,12 @@ instance Num Complex where
     where m = magnitude z
   fromInteger n = C (fromInteger n) 0
 
+instance Fractional Complex where
+  C a b / C c d =
+    let den = c*c + d*d
+    in C ((a*c + b*d) / den) ((b*c - a*d) / den)
+  fromRational r = C r 0
+
 magnitude :: Complex -> Rational
 magnitude (C a b) = toRational (sqrt (fromRational (a*a + b*b) :: Double))
 
