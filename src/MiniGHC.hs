@@ -56,7 +56,7 @@ module MiniGHC
   ) where
 
 import Data.Maybe (fromMaybe)
-import Control.Applicative ((<|>))
+import Control.Applicative (Alternative(..), (<|>))
 import Control.Monad (guard)
 import Data.List (nub)
 import Data.Set (Set)
@@ -189,6 +189,12 @@ instance Monad Parser where
   P p >>= f = P $ \ts -> do
     (x, ts1) <- p ts
     unP (f x) ts1
+
+instance Alternative Parser where
+  empty = P $ \_ -> Left "empty"
+  P p <|> P q = P $ \ts -> case p ts of
+    Right r -> Right r
+    Left _  -> q ts
 
 peek :: Parser Token
 peek = P $ \ts -> case ts of
