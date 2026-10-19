@@ -39,15 +39,6 @@ The lexer and recursive-descent parser translate concrete syntax into the abstra
 
 The default execution path type-checks a program and then evaluates it. The Core and STG representations are available for optimisation passes or alternative code generators.
 
-## Classic calculi
-
-Separate modules implement the lambda calculi that underlie both the MiniGHC language and GHC’s design:
-
-- **Simply-typed lambda calculus** (`MiniGHC.Calculi.STLC`) — syntax, bidirectional type checker, and evaluator.
-- **System F** (`MiniGHC.Calculi.SystemF`) — polymorphic lambda calculus with type abstraction, type application, and type substitution.
-- **Hindley–Milner fragment** (`MiniGHC.Calculi.HM`) — a small inference implementation illustrating the classic structure of constraint generation and substitution.
-
-These modules are self-contained and may be used or extended independently of the main pipeline.
 
 ## Building and running
 
@@ -87,41 +78,12 @@ The compiler implements the phases listed above. Natural extensions that build d
 BSD-3-Clause. See `LICENSE`.
 
 
-## Linter
-
-A built-in linter reuses the parser and type checker and reports additional static issues (unused bindings, parse/type errors).
-
-```sh
-cabal run minighc -- --lint examples/factorial.mgh
-```
-
-The linter runs automatically on every push and pull request via GitHub Actions (`.github/workflows/lint.yml`).
 
 
-## Geometric calculi
-
-Hand-rolled implementations of three classical calculi:
-
-- **Umbral Calculus** (`MiniGHC.Geometry.Umbral`) — polynomial sequences, umbral operator, forward difference, Appell and binomial-type sequences.
-- **Grassmann Ausdehnungslehre (1844)** (`MiniGHC.Geometry.Grassmann`) — exterior algebra of multivectors, wedge product, progressive and regressive products.
-- **Schubert Enumerative Calculus** (`MiniGHC.Geometry.Schubert`) — Schubert symbols, the Pieri rule, and special Schubert cycles.
-
-These modules are independent of the compiler pipeline and may be imported directly.
 
 
-## Operational calculus
-
-- **Heaviside operational calculus** (`MiniGHC.Operators.Heaviside`) — algebraic manipulation of the differential operator \( p = d/dt \). Rational functions of \( p \) are expanded by Heaviside’s theorem and applied to step inputs, reproducing the technique Heaviside used for circuit and transmission-line problems before a rigorous foundation existed.
 
 
-## Calculus of imaginary quantities
+## Companion mathematics
 
-- **Complex-variable calculus** (`MiniGHC.Analysis.Complex`) — hand-rolled complex numbers, magnitude and argument, residue at simple poles, polygonal contour integration, and Cauchy’s integral formula.
-
-
-## Quaternion state and Liquid Haskell
-
-- **Hamilton product** (`MiniGHC.Operators.Quaternion`) — 4D state vector `(real, i, j, k)` with the non-commutative Hamilton product.
-- Liquid Haskell refinements encode the norm-multiplicativity theorem  
-  `|q1 * q2| = |q1| * |q2|`  
-  and the derived fact that unit quaternions are closed under the product.
+Hand-rolled implementations of classical calculi (Umbral, Grassmann 1844, Schubert, Heaviside operational calculus, complex analysis, quaternions, STLC, System F, Hindley–Milner) live in the `math/` directory. They are not part of the compiler build.
