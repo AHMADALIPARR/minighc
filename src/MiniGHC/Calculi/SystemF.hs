@@ -31,7 +31,16 @@ substTy x s (TVar y) | x == y = s
 substTy x s (TArr a b) = TArr (substTy x s a) (substTy x s b)
 substTy x s (TForall y b)
   | x == y = TForall y b
+  | y `elem` free s = let z=fresh y (free s ++ free b ++ [x])
+                     in TForall z (substTy x s (substTy y (TVar z) b))
   | otherwise = TForall y (substTy x s b)
+
+free :: Ty -> [String]
+free (TVar x)=[x]
+free (TArr a b)=free a++free b
+free (TForall x b)=filter (/=x) (free b)
+fresh :: String -> [String] -> String
+fresh x used=head [x++replicate n '\'' | n<-[1..],x++replicate n '\'' `notElem` used]
 
 synth :: Ctx -> Tm -> Maybe Ty
 synth ctx (Var x) = lookup x ctx
@@ -63,6 +72,6 @@ eval env (App f a) = do
   va <- eval env a
   pure (k va)
 eval env (TLam _ b) = pure $ VTLam (\_ -> case eval env b of Just r -> r; Nothing -> error "SF teval")
-eval env (TApp e _) = do
+eval env (TApp e t) = do
   VTLam k <- eval env e
-  pure (k undefined)  -- type argument erased at runtime
+  pure (k t)

@@ -1,0 +1,29 @@
+{
+  "capture_kind": "Actual command output rendered as terminal cards; presentation timing is edited",
+  "stages": [
+    [
+      "$ minighc examples/factorial.mgh",
+      [
+        "--- examples/factorial.mgh ---",
+        "type: TNat",
+        "value: VNat 120"
+      ]
+    ],
+    [
+      "$ minighc examples/pairs.mgh",
+      [
+        "--- examples/pairs.mgh ---",
+        "type: TNat",
+        "value: VNat 30"
+      ]
+    ],
+    [
+      "$ minighc examples/list.mgh",
+      [
+        "--- examples/list.mgh ---",
+        "type: TData \"List\" [TNat]",
+        "value: VCon Cons [VNat 1,VCon Cons [VNat 2,VCon Nil []]]"
+      ]
+    ]
+  ]
+}

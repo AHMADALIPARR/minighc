@@ -9,9 +9,11 @@ type: TNat
 value: VNat 120
 
 --- examples/pairs.mgh ---
-parsed: Let "p" (Pair (LitNat 10) (LitNat 20)) (Add (App (Var "fst") (Var "p")) (App (Var "snd") (Var "p")))
-type error
+parsed: Let "p" (Pair (LitNat 10) (LitNat 20)) (Add (Fst (Var "p")) (Snd (Var "p")))
+type: TNat
+value: VNat 30
 
 --- examples/list.mgh ---
-parsed: Let "xs" (App (App (Var "Cons") (LitNat 1)) (App (App (Var "Cons") (LitNat 2)) (Var "Nil"))) (Var "xs")
-type error
+parsed: Let "xs" (Con "Cons" [LitNat 1,Con "Cons" [LitNat 2,Con "Nil" []]]) (Var "xs")
+type: TData "List" [TNat]
+value: VCon Cons [VNat 1,VCon Cons [VNat 2,VCon Nil []]]

@@ -52,17 +52,17 @@ module MiniGHC
   , eval
   , parseTerm
   , Tm(..)
-  , Pat(..)
+  , Pat(..), Ty(..), Val(..), Core(..), CPat(..), desugar, freeVarsCore
+  , Stg(..), Atom(..), Prim(..), toSTG, Instruction(..), compileSTG, runMachine
   ) where
 
 import Data.Maybe (fromMaybe)
 import Control.Applicative hiding (many)
-import Control.Applicative ((<|>))
 import Control.Monad (guard)
 import Data.List (nub)
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.Char (isAlpha, isAlphaNum, isDigit, isSpace)
+import Data.Char (isAlpha, isAlphaNum, isDigit, isSpace, isUpper)
 import System.Environment (getArgs)
 import System.IO (hPutStrLn, stderr)
 import System.Exit (exitFailure)
@@ -125,6 +125,7 @@ data Token
   | TPlus | TMinus | TStar
   | TLParen | TRParen | TComma
   | TEq | TSemi
+  | TInvalid Char
   | TEOF
   deriving (Eq, Show)
 
@@ -153,7 +154,7 @@ lexer = go
           ','  -> TComma : go cs
           '='  -> TEq : go cs
           ';'  -> TSemi : go cs
-          _    -> error $ "lexer: unexpected " ++ show c
+          _    -> TInvalid c : go cs
 
 keyword :: String -> Token
 keyword "let"    = TLet
@@ -301,10 +302,10 @@ pAppSimple :: Parser Tm
 pAppSimple = do
   f <- pAtom
   args <- many pAtom
-  pure (foldl App f args)
+  pure (case f of Con c xs -> Con c (xs ++ args); _ -> foldl App f args)
 
 pAtom :: Parser Tm
-pAtom = pLit <|> pVar <|> pParens <|> pPrim
+pAtom = pLit <|> pParens <|> pPrim <|> pVar
 
 pLit :: Parser Tm
 pLit = do
@@ -316,7 +317,9 @@ pLit = do
     _        -> P $ \_ -> Left "not a literal"
 
 pVar :: Parser Tm
-pVar = Var <$> pIdent
+pVar = do
+  name <- pIdent
+  pure (if not (null name) && isUpper (head name) then Con name [] else Var name)
 
 pIdent :: Parser String
 pIdent = do
@@ -328,16 +331,19 @@ pIdent = do
 pParens :: Parser Tm
 pParens = do
   eat TLParen
-  e <- pTerm
-  -- pair or just grouping
   next <- peek
   case next of
-    TComma -> do
-      eat TComma
-      e2 <- pTerm
-      eat TRParen
-      pure (Pair e e2)
-    _ -> eat TRParen >> pure e
+    TRParen -> eat TRParen >> pure Unit
+    _ -> do
+      e <- pTerm
+      end <- peek
+      case end of
+        TComma -> do
+          eat TComma
+          e2 <- pTerm
+          eat TRParen
+          pure (Pair e e2)
+        _ -> eat TRParen >> pure e
 
 pPrim :: Parser Tm
 pPrim = do
@@ -351,13 +357,23 @@ pPrim = do
     _ -> P $ \_ -> Left "not a prim"
 
 pPat :: Parser Pat
-pPat = pPVar <|> pPCon <|> pPLit <|> pPWild
+pPat = pPWild <|> pPCon <|> pPLit <|> pPPair <|> pPVar
   where
     pPVar = PVar <$> pIdent
     pPCon = do
       c <- pIdent
+      if null c || not (isUpper (head c)) then empty else pure ()
       xs <- many pIdent
       pure (PCon c xs)
+    pPPair = do
+      eat TLParen
+      t <- peek
+      if t == TRParen then eat TRParen >> pure PUnit else do
+        a <- pPat
+        eat TComma
+        b <- pPat
+        eat TRParen
+        pure (PPair a b)
     pPLit = do
       t <- peek
       case t of
@@ -390,7 +406,8 @@ synth ctx (App f a) = do
   case tf of
     TArr t1 t2 -> check ctx a t1 >> pure t2
     _ -> Nothing
-synth _ (LitNat _) = pure TNat
+synth _ (LitNat n) | n >= 0 = pure TNat
+                  | otherwise = Nothing
 synth _ (LitBool _) = pure TBool
 synth _ Unit = pure TUnit
 synth ctx (Succ t) = check ctx t TNat >> pure TNat
@@ -428,11 +445,11 @@ synth ctx (Snd e) = do
     TPair _ t2 -> pure t2
     _ -> Nothing
 synth ctx (Con c args) = case c of
-  "Z" -> pure (TData "Nat" [])
+  "Z" | null args -> pure (TData "Nat" [])
   "S" | [a] <- args -> check ctx a (TData "Nat" []) >> pure (TData "Nat" [])
-  "True" -> pure TBool
-  "False" -> pure TBool
-  "Nil" -> pure (TData "List" [TNat])
+  "True" | null args -> pure TBool
+  "False" | null args -> pure TBool
+  "Nil" | null args -> pure (TData "List" [TNat])
   "Cons" | [a,as] <- args -> do
               check ctx a TNat
               check ctx as (TData "List" [TNat])
@@ -458,15 +475,17 @@ check ctx tm expected = do
 
 patCtx :: Ctx -> Pat -> Ty -> Maybe Ctx
 patCtx ctx (PVar x) ty = pure ((x, ty):ctx)
-patCtx ctx (PCon "S" [x]) _ = pure ((x, TData "Nat" []):ctx)
-patCtx ctx (PCon "Z" []) _ = pure ctx
-patCtx ctx (PCon "Nil" []) _ = pure ctx
-patCtx ctx (PCon "Cons" [x,xs]) _ = pure ((x,TNat):(xs, TData "List" [TNat]):ctx)
+patCtx ctx (PCon "S" [x]) (TData "Nat" []) = pure ((x, TData "Nat" []):ctx)
+patCtx ctx (PCon "Z" []) (TData "Nat" []) = pure ctx
+patCtx ctx (PCon "Nil" []) (TData "List" [TNat]) = pure ctx
+patCtx ctx (PCon "Cons" [x,xs]) (TData "List" [TNat]) = pure ((x,TNat):(xs, TData "List" [TNat]):ctx)
+patCtx ctx (PCon "True" []) TBool = pure ctx
+patCtx ctx (PCon "False" []) TBool = pure ctx
 patCtx ctx (PPair p1 p2) (TPair t1 t2) = do
   ctx1 <- patCtx ctx p1 t1
   patCtx ctx1 p2 t2
 patCtx ctx PUnit TUnit = pure ctx
-patCtx ctx (PLitNat _) _ = pure ctx
+patCtx ctx (PLitNat _) TNat = pure ctx
 patCtx ctx PWild _ = pure ctx
 patCtx _ _ _ = Nothing
 
@@ -508,7 +527,7 @@ eval env (Succ t) = do VNat n <- eval env t; pure (VNat (n+1))
 eval env (Pred t) = do VNat n <- eval env t; pure (VNat (max 0 (n-1)))
 eval env (IsZero t) = do VNat n <- eval env t; pure (VBool (n==0))
 eval env (Add t1 t2) = do VNat a <- eval env t1; VNat b <- eval env t2; pure (VNat (a+b))
-eval env (Sub t1 t2) = do VNat a <- eval env t1; VNat b <- eval env t2; pure (VNat (a-b))
+eval env (Sub t1 t2) = do VNat a <- eval env t1; VNat b <- eval env t2; pure (VNat (max 0 (a-b)))
 eval env (Mul t1 t2) = do VNat a <- eval env t1; VNat b <- eval env t2; pure (VNat (a*b))
 eval env (If c t e) = do
   VBool b <- eval env c
@@ -532,11 +551,6 @@ eval env (Case scrut alts) = do
   matchAlts env v alts
 eval env (Ann e _) = eval env e
 
--- Proper recursive let (knot-tying via laziness)
--- FIX (assistant): the original defined recEnv with an unbound `v`
--- (`[(x, v) | (x, _) <- binds]`), so the module did not compile
--- (GHC-88464). The knot is tied by a single recEnv that refers to
--- vals, which refers back to recEnv — laziness closes the loop.
 evalRec :: [(String,Val)] -> [(String, Tm)] -> Tm -> Maybe Val
 evalRec env binds body = do
   let recEnv = zip (map fst binds) vals ++ env
@@ -559,6 +573,8 @@ matchPat env (PPair p1 p2) (VPair v1 v2) = do
   matchPat env1 p2 v2
 matchPat env PUnit VUnit = pure env
 matchPat env (PLitNat n) (VNat m) | n == m = pure env
+matchPat env (PCon "True" []) (VBool True) = pure env
+matchPat env (PCon "False" []) (VBool False) = pure env
 matchPat env PWild _ = pure env
 matchPat _ _ _ = Nothing
 
@@ -663,22 +679,138 @@ patBinders (CPCon _ xs) = Set.fromList xs
 patBinders (CPPair p1 p2) = patBinders p1 `Set.union` patBinders p2
 patBinders _ = Set.empty
 
--- STG remains as in the baseline (omitted here for brevity in this expansion
--- comment; the conversion functions can be restored from the previous version
--- if a full STG interpreter is desired).
+data Atom = AVar String | ANat Integer | ABool Bool | AUnit deriving (Eq,Show)
+data Prim = PSucc | PPred | PIsZero | PAdd | PSub | PMul | MkPair | PFst | PSnd
+          | MkCon String deriving (Eq,Show)
+-- Strict, atomized closure IR with explicit free-variable capture sets.
+data Stg = Return Atom | Enter Atom Atom | Primitive Prim [Atom]
+         | Closure [String] String Stg | Bind String Stg Stg
+         | BindRec [(String,Stg)] Stg | Branch Atom Stg Stg
+         | Match Atom [(CPat,Stg)] deriving (Eq,Show)
+
+toSTG :: Core -> Stg
+toSTG core = fst (go core (0::Integer))
+  where
+    atoms [] n k = k [] n
+    atoms (x:xs) n k = atom x n (\a m -> atoms xs m (\as j -> k (a:as) j))
+    atom c n k = case c of
+      CVar x -> k (AVar x) n
+      CLitNat x -> k (ANat x) n
+      CLitBool x -> k (ABool x) n
+      CUnit -> k AUnit n
+      _ -> let name="$"++show n; (rhs,m)=go c (n+1); (body,j)=k (AVar name) m
+           in (Bind name rhs body,j)
+    prim op cs n = atoms cs n (\as m -> (Primitive op as,m))
+    go (CVar x) n=(Return (AVar x),n)
+    go (CLitNat x) n=(Return (ANat x),n)
+    go (CLitBool x) n=(Return (ABool x),n)
+    go CUnit n=(Return AUnit,n)
+    go c@(CLam x _ b) n=let (body,m)=go b n in (Closure (Set.toList (freeVarsCore c)) x body,m)
+    go (CApp f a) n=atoms [f,a] n (\as m -> case as of [x,y] -> (Enter x y,m); _ -> error "application arity")
+    go (CSucc a) n=prim PSucc [a] n
+    go (CPred a) n=prim PPred [a] n
+    go (CIsZero a) n=prim PIsZero [a] n
+    go (CAdd a b) n=prim PAdd [a,b] n
+    go (CSub a b) n=prim PSub [a,b] n
+    go (CMul a b) n=prim PMul [a,b] n
+    go (CPair a b) n=prim MkPair [a,b] n
+    go (CFst a) n=prim PFst [a] n
+    go (CSnd a) n=prim PSnd [a] n
+    go (CCon c as) n=prim (MkCon c) as n
+    go (CIf c a b) n=atom c n (\x m -> let (aa,j)=go a m; (bb,k)=go b j in (Branch x aa bb,k))
+    go (CLet x a b) n=let (aa,m)=go a n; (bb,j)=go b m in (Bind x aa bb,j)
+    go (CLetRec bs b) n=let (bindings,m)=list bs n; (body,j)=go b m in (BindRec bindings body,j)
+    go (CCase a bs) n=atom a n (\x m -> let (alts,j)=alternatives bs m in (Match x alts,j))
+    go (CAnn a _) n=go a n
+    list [] n=([],n)
+    list ((x,a):xs) n=let (aa,m)=go a n; (rest,j)=list xs m in ((x,aa):rest,j)
+    alternatives [] n=([],n)
+    alternatives ((p,a):xs) n=let (aa,m)=go a n; (rest,j)=alternatives xs m in ((p,aa):rest,j)
+
+data Instruction = Push Atom | Call | Operate Prim Int
+                 | MakeClosure [String] String [Instruction]
+                 | LetCode String [Instruction] [Instruction]
+                 | RecCode [(String,[Instruction])] [Instruction]
+                 | IfCode [Instruction] [Instruction]
+                 | CaseCode [(CPat,[Instruction])] deriving (Eq,Show)
+
+compileSTG :: Stg -> [Instruction]
+compileSTG (Return a)=[Push a]
+compileSTG (Enter f a)=[Push f,Push a,Call]
+compileSTG (Primitive p as)=map Push as++[Operate p (length as)]
+compileSTG (Closure fs x b)=[MakeClosure fs x (compileSTG b)]
+compileSTG (Bind x a b)=[LetCode x (compileSTG a) (compileSTG b)]
+compileSTG (BindRec bs b)=[RecCode [(x,compileSTG a) | (x,a)<-bs] (compileSTG b)]
+compileSTG (Branch a b c)=[Push a,IfCode (compileSTG b) (compileSTG c)]
+compileSTG (Match a bs)=[Push a,CaseCode [(p,compileSTG b) | (p,b)<-bs]]
+
+runMachine :: [Instruction] -> Maybe Val
+runMachine=machine [] []
+
+machine :: [(String,Val)] -> [Val] -> [Instruction] -> Maybe Val
+machine _ [v] []=Just v
+machine _ _ []=Nothing
+machine env stack (instruction:rest)=case instruction of
+  Push a -> do v<-value a; machine env (v:stack) rest
+  MakeClosure fs x code ->
+    let captured=filter ((`elem` fs).fst) env
+        f v=fromMaybe (error "closure execution failed") (machine ((x,v):captured) [] code)
+    in machine env (VLam f:stack) rest
+  Call -> case stack of v:VLam f:ss -> machine env (f v:ss) rest; _ -> Nothing
+  Operate op n -> do
+    let (args,ss)=splitAt n stack
+    v<-primitive op (reverse args)
+    machine env (v:ss) rest
+  LetCode x rhs body -> do v<-machine env [] rhs; r<-machine ((x,v):env) [] body; machine env (r:stack) rest
+  RecCode bindings body ->
+    let recEnv=zip (map fst bindings) vals++env
+        vals=[fromMaybe (error "recursive closure execution failed") (machine recEnv [] code) | (_,code)<-bindings]
+    in do r<-machine recEnv [] body; machine env (r:stack) rest
+  IfCode yes no -> case stack of
+    VBool b:ss -> do r<-machine env [] (if b then yes else no); machine env (r:ss) rest
+    _ -> Nothing
+  CaseCode alts -> case stack of
+    v:ss -> do r<-choose v alts; machine env (r:ss) rest
+    _ -> Nothing
+  where
+    value (AVar x)=lookup x env
+    value (ANat n)=Just (VNat n)
+    value (ABool b)=Just (VBool b)
+    value AUnit=Just VUnit
+    choose _ []=Nothing
+    choose v ((p,code):alts)=case matchPat env (pat p) v of
+      Just env' -> machine env' [] code
+      Nothing -> choose v alts
+    pat (CPVar x)=PVar x
+    pat (CPCon c xs)=PCon c xs
+    pat (CPLitNat n)=PLitNat n
+    pat (CPPair a b)=PPair (pat a) (pat b)
+    pat CPUnit=PUnit
+    pat CPWild=PWild
+
+primitive :: Prim -> [Val] -> Maybe Val
+primitive PSucc [VNat n]=Just (VNat (n+1))
+primitive PPred [VNat n]=Just (VNat (max 0 (n-1)))
+primitive PIsZero [VNat n]=Just (VBool (n==0))
+primitive PAdd [VNat a,VNat b]=Just (VNat (a+b))
+primitive PSub [VNat a,VNat b]=Just (VNat (max 0 (a-b)))
+primitive PMul [VNat a,VNat b]=Just (VNat (a*b))
+primitive MkPair [a,b]=Just (VPair a b)
+primitive PFst [VPair a _]=Just a
+primitive PSnd [VPair _ b]=Just b
+primitive (MkCon "True") []=Just (VBool True)
+primitive (MkCon "False") []=Just (VBool False)
+primitive (MkCon c) vs=Just (VCon c vs)
+primitive _ _=Nothing
 
 ------------------------------------------------------------
 -- 6. Simple abstract machine / compileAndRun
 ------------------------------------------------------------
 
--- For the expanded baseline we provide a direct interpreter path that
--- type-checks then evaluates. A bytecode machine can be layered on top
--- of Core later.
-
 compileAndRun :: Tm -> Maybe Val
 compileAndRun tm = do
   _ <- synth [] tm
-  eval [] tm
+  runMachine (compileSTG (toSTG (desugar tm)))
 
 ------------------------------------------------------------
 -- Demo + CLI
@@ -706,15 +838,15 @@ runFile path = do
   src <- readFile path
   putStrLn $ "\n--- " ++ path ++ " ---"
   case parseTerm src of
-    Left err -> putStrLn $ "parse error: " ++ err
+    Left err -> hPutStrLn stderr ("parse error: " ++ err) >> exitFailure
     Right tm -> do
       putStrLn $ "parsed: " ++ show tm
       case synth [] tm of
-        Nothing -> putStrLn "type error"
+        Nothing -> hPutStrLn stderr "type error" >> exitFailure
         Just ty -> do
           putStrLn $ "type: " ++ show ty
-          case eval [] tm of
-            Nothing -> putStrLn "eval failed"
+          case compileAndRun tm of
+            Nothing -> hPutStrLn stderr "eval failed" >> exitFailure
             Just v  -> putStrLn $ "value: " ++ show v
 
 main :: IO ()

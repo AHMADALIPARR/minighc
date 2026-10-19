@@ -1,3 +1,1 @@
 examples/pairs.mgh:
-  error: type error
-  warning: unused binding: p
