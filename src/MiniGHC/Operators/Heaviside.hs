@@ -35,6 +35,7 @@ partialFractions op = do
     else Right [(r,P.eval n r / P.eval (P.derivative d) r) | r <- rs]
 heavisideExpand, expand :: Operator -> [(Rational,Rational)]
 heavisideExpand op = either error id (partialFractions op)
+-- | Synonym for 'heavisideExpand'.
 expand = heavisideExpand
 apply :: Operator -> Rational -> [(Rational,Rational)]
 apply op amp = [(r,amp*a) | (r,a) <- heavisideExpand (mul op invP)]
@@ -42,5 +43,11 @@ impedance :: Rational -> Rational -> Rational -> Operator
 impedance r l c
   | c==0 = error "capacitance must be nonzero"
   | otherwise = add (add (constOp r) (mul p (constOp l))) (mul invP (constOp (1/c)))
+-- | Step response of the system whose IMPEDANCE is the
+-- given operator Z = n/d: the current drawn by a unit
+-- step voltage, I(p) = (1/p) / Z(p) = d / (p * n),
+-- returned as (pole, amplitude) pairs of the partial
+-- fraction expansion, i.e. the time response is the sum
+-- of amp * exp(pole * t).
 solveStep :: Operator -> [(Rational,Rational)]
 solveStep (Op n d) = apply (Op d n) 1
