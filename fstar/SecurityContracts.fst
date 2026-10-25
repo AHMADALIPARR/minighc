@@ -2,6 +2,7 @@ module SecurityContracts
 
 open FStar.List.Tot
 open FStar.String
+open FStar.Tactics
 
 let empty_string : string = ""
 
@@ -54,260 +55,299 @@ let rec capability_present (c:capability) (caps:list capability) : bool =
   | [] -> false
   | h::t -> if h = c then true else capability_present c t
 
-let rec authorization_grants (ctx:auth_context) (needed:capability) : bool =
+let authorization_grants (ctx:auth_context) (needed:capability) : bool =
   capability_present needed ctx.capabilities
 
-let rec fail_closed (guard:state_guard) : policy_result =
+let fail_closed (guard:state_guard) : policy_result =
   if guard.deny_on_failure then Denied "fail-closed" else Allowed
 
-let rec enforce_policy (ctx:auth_context) (needed:capability) (g:state_guard) : policy_result =
+let enforce_policy (ctx:auth_context) (needed:capability) (g:state_guard) : policy_result =
   if g.require_auth && String.length ctx.principal = 0 then Denied "missing principal"
-  else if g.require_capability && not (authorization_grants ctx needed) then Denied (needed ^ ": capability missing")
+  else if g.require_capability && not (authorization_grants ctx needed) then (let _ = concat_length needed ": capability missing" in Denied (needed ^ ": capability missing"))
   else Allowed
 
-let rec min_call_budget (cap:resource_cap) : nat =
+let min_call_budget (cap:resource_cap) : nat =
   cap.max_calls
 
-let rec resource_limit_ok (cap:resource_cap) : bool =
+let resource_limit_ok (cap:resource_cap) : bool =
   cap.max_calls <= 1000000 && cap.max_bytes <= 1000000000 && cap.max_seconds <= 86400
 
-let rec apply_capability_limit (cap:resource_cap) (calls:nat) : resource_cap =
+let apply_capability_limit (cap:resource_cap) (calls:nat) : resource_cap =
   if calls <= cap.max_calls then cap else { cap with max_calls = calls }
 
-let rec audit_event (principal:principal) (action:action) (success:bool) : audit_record =
+let audit_event (principal:principal) (action:action) (success:bool) : audit_record =
   { event = "audit"; principal = principal; action = action; success = success }
 
-let rec audit_record_ok (r:audit_record) : bool =
+let audit_record_ok (r:audit_record) : bool =
   String.length r.event > 0 && String.length r.action > 0 && String.length r.principal > 0
 
-let rec append_audit (state:protocol_state) (record:audit_record) : protocol_state =
+let append_audit (state:protocol_state) (record:audit_record) : protocol_state =
   { state with audited = record :: state.audited; step = state.step + 1 }
 
-let rec audit_count (state:protocol_state) : nat =
+let audit_count (state:protocol_state) : nat =
   list_length state.audited
 
-let rec secure_protocol_state (state:protocol_state) : bool =
-  state.active = true || state.active = false
+(* A protocol state is secure exactly when its step counter agrees with
+   its audit trail: every audit append increments the step by one, so a
+   state built by appending has step = number of audit records. The
+   previous version was a tautology (active = true || active = false)
+   and accepted every state, including a tampered one. *)
+let secure_protocol_state (state:protocol_state) : bool =
+  state.step = audit_count state
 
-let rec transition_requires (t:secure_transition) (ctx:auth_context) : policy_result =
-  if authorization_grants ctx t.required_capability then Allowed else Denied (t.required_capability ^ ": missing transition capability")
+(* Appending one audit record increments the step by exactly one. *)
+let append_audit_step_lemma (state:protocol_state) (record:audit_record)
+  : Lemma ((append_audit state record).step = state.step + 1) =
+  ()
 
-let rec principal_has_required_capability (ctx:auth_context) (needed:capability) : bool =
+(* Appending preserves the secure-state invariant: the step and the
+   audit count both grow by one. *)
+let append_audit_preserves_secure (state:protocol_state) (record:audit_record)
+  : Lemma
+    (requires (secure_protocol_state state))
+    (ensures (secure_protocol_state (append_audit state record))) =
+  ()
+
+let transition_requires (t:secure_transition) (ctx:auth_context) : policy_result =
+  if authorization_grants ctx t.required_capability then Allowed else (let _ = concat_length t.required_capability ": missing transition capability" in Denied (t.required_capability ^ ": missing transition capability"))
+
+let principal_has_required_capability (ctx:auth_context) (needed:capability) : bool =
   authorization_grants ctx needed
 
-let rec denies_missing_capability (ctx:auth_context) (needed:capability) : policy_result =
+(* The concat_length fact is established before the branch here, so it is
+   in context for the Denied argument whichever way the branch goes. *)
+let denies_missing_capability (ctx:auth_context) (needed:capability) : policy_result =
+  let _ = concat_length needed ": not authorized" in
   if principal_has_required_capability ctx needed then Allowed else Denied (needed ^ ": not authorized")
 
-let rec basic_context (principal:principal) : auth_context =
+let basic_context (principal:principal) : auth_context =
   { principal = principal; capabilities = [] }
 
-let rec grant_capability (ctx:auth_context) (c:capability) : auth_context =
+let grant_capability (ctx:auth_context) (c:capability) : auth_context =
   { principal = ctx.principal; capabilities = c :: ctx.capabilities }
 
-let rec prune_capabilities (ctx:auth_context) : auth_context =
+let prune_capabilities (ctx:auth_context) : auth_context =
   { principal = ctx.principal; capabilities = [] }
 
-let rec valid_action (a:action) : bool =
+let valid_action (a:action) : bool =
   String.length a > 0
 
-let rec valid_principal (p:principal) : bool =
+let valid_principal (p:principal) : bool =
   String.length p > 0
 
-let rec valid_transition (t:secure_transition) : bool =
+let valid_transition (t:secure_transition) : bool =
   String.length t.from_state > 0 && String.length t.to_state > 0 && String.length t.required_capability > 0
 
-let rec policy_minimally_safe (g:state_guard) : bool =
+let policy_minimally_safe (g:state_guard) : bool =
   g.require_auth || g.require_capability || g.deny_on_failure
 
-let rec default_guard : state_guard =
+let default_guard : state_guard =
   { require_auth = true; require_capability = true; deny_on_failure = true }
 
-let rec secure_guard (g:state_guard) : bool =
+let secure_guard (g:state_guard) : bool =
   policy_minimally_safe g
 
-let rec resource_guard_ok (cap:resource_cap) : bool =
+let resource_guard_ok (cap:resource_cap) : bool =
   cap.max_calls > 0 && cap.max_bytes > 0 && cap.max_seconds > 0
 
-let rec check_resource_cap (cap:resource_cap) : policy_result =
+let check_resource_cap (cap:resource_cap) : policy_result =
   if resource_limit_ok cap && resource_guard_ok cap then Allowed else Denied "resource budget invalid"
 
-let rec add_audit_step (state:protocol_state) (principal:principal) (action:action) : protocol_state =
+let add_audit_step (state:protocol_state) (principal:principal) (action:action) : protocol_state =
   append_audit state (audit_event principal action true)
 
-let rec mark_failure (state:protocol_state) (principal:principal) (action:action) : protocol_state =
+let mark_failure (state:protocol_state) (principal:principal) (action:action) : protocol_state =
   append_audit state (audit_event principal action false)
 
-let rec state_is_active (state:protocol_state) : bool =
+let state_is_active (state:protocol_state) : bool =
   state.active
 
-let rec step_is_monotone (state:protocol_state) : bool =
-  state.step >= 0
+(* The old step_is_monotone claimed step >= 0, which is vacuous for a
+   nat and says nothing about any transition. Monotonicity is a claim
+   about appending, and it is proven as append_audit_step_lemma above:
+   every append moves the step up by exactly one, never down. *)
 
-let rec protocol_is_auditable (state:protocol_state) : bool =
+let protocol_is_auditable (state:protocol_state) : bool =
   state.active = true && audit_count state > 0
 
-let rec capability_guard_ok (ctx:auth_context) (needed:capability) : bool =
+let capability_guard_ok (ctx:auth_context) (needed:capability) : bool =
   authorization_grants ctx needed
 
-let rec deny_if_not_granted (ctx:auth_context) (needed:capability) : policy_result =
+let deny_if_not_granted (ctx:auth_context) (needed:capability) : policy_result =
   if capability_guard_ok ctx needed then Allowed else Denied "capability not granted"
 
-let rec allowed_transition (ctx:auth_context) (t:secure_transition) : bool =
+let allowed_transition (ctx:auth_context) (t:secure_transition) : bool =
   principal_has_required_capability ctx t.required_capability
 
-let rec transition_success (ctx:auth_context) (t:secure_transition) : policy_result =
+let transition_success (ctx:auth_context) (t:secure_transition) : policy_result =
   if allowed_transition ctx t then Allowed else Denied "transition not authorized"
 
-let rec audit_contains_event (state:protocol_state) (event:string) : bool =
+(* Same rebuilt-record recursion as the registry: the audit list is the
+   measure. *)
+let rec audit_contains_event (state:protocol_state) (event:string) : Tot bool (decreases state.audited) =
   match state.audited with
   | [] -> false
   | h::t -> if h.event = event then true else audit_contains_event { state with audited = t } event
 
-let rec principal_is_known (ctx:auth_context) : bool =
+let principal_is_known (ctx:auth_context) : bool =
   valid_principal ctx.principal
 
-let rec capability_binding_ok (ctx:auth_context) : bool =
+let capability_binding_ok (ctx:auth_context) : bool =
   principal_is_known ctx
 
-let rec zero_state : protocol_state =
+let zero_state : protocol_state =
   { step = 0; active = true; audited = [] }
 
-let rec read_only_state : protocol_state =
+let read_only_state : protocol_state =
   { step = 0; active = false; audited = [] }
 
-let rec state_after_event (state:protocol_state) (event:string) : protocol_state =
-  { state with audited = { event = event; principal = "system"; action = "event"; success = true } :: state.audited }
+(* A system event goes through append_audit like every other record, so
+   the step counter stays in agreement with the trail. The previous
+   version appended without incrementing the step and silently broke
+   the secure-state invariant. *)
+let state_after_event (state:protocol_state) (event:string) : protocol_state =
+  append_audit state { event = event; principal = "system"; action = "event"; success = true }
 
-let rec record_transition (state:protocol_state) (principal:principal) (action:action) : protocol_state =
+let record_transition (state:protocol_state) (principal:principal) (action:action) : protocol_state =
   append_audit state (audit_event principal action true)
 
-let rec fail_transition (state:protocol_state) (principal:principal) (action:action) : protocol_state =
+let fail_transition (state:protocol_state) (principal:principal) (action:action) : protocol_state =
   append_audit state (audit_event principal action false)
 
-let rec clear_audit (state:protocol_state) : protocol_state =
-  { state with audited = [] }
+(* clear_audit is deliberately gone. An audit trail that any caller can
+   silently wipe is not an audit trail: it destroys the evidence the
+   secure-state invariant counts. Audit is append-only in this model.
+   If rotation is ever needed, it must be a new privileged operation
+   that seals the old trail, not a quiet delete. *)
 
-let rec safe_state_after_audit (state:protocol_state) : bool =
-  state.active = true && state.step >= 0
+let safe_state_after_audit (state:protocol_state) : bool =
+  state.active = true && secure_protocol_state state
 
-let rec capability_context_new (principal:principal) (caps:list capability) : auth_context =
+let capability_context_new (principal:principal) (caps:list capability) : auth_context =
   { principal = principal; capabilities = caps }
 
-let rec state_guard_is_strong (g:state_guard) : bool =
+let state_guard_is_strong (g:state_guard) : bool =
   g.require_auth && g.require_capability && g.deny_on_failure
 
-let rec guard_policy_summary (g:state_guard) : string =
+let guard_policy_summary (g:state_guard) : string =
   if state_guard_is_strong g then "strong" else "weak"
 
-let rec capability_projection (ctx:auth_context) : list capability =
+let capability_projection (ctx:auth_context) : list capability =
   ctx.capabilities
 
-let rec transition_step_count (state:protocol_state) : nat =
+let transition_step_count (state:protocol_state) : nat =
   state.step
 
-let rec policy_action_consistent (ctx:auth_context) (a:action) : bool =
+let policy_action_consistent (ctx:auth_context) (a:action) : bool =
   valid_action a && valid_principal ctx.principal
 
-let rec capability_is_present (ctx:auth_context) (c:capability) : bool =
+let capability_is_present (ctx:auth_context) (c:capability) : bool =
   capability_present c ctx.capabilities
 
-let rec principal_has_capability (ctx:auth_context) (c:capability) : bool =
+let principal_has_capability (ctx:auth_context) (c:capability) : bool =
   capability_is_present ctx c
 
-let rec deny_lack_of_capability (ctx:auth_context) (c:capability) : policy_result =
+let deny_lack_of_capability (ctx:auth_context) (c:capability) : policy_result =
   if principal_has_capability ctx c then Allowed else Denied "missing capability"
 
-let rec transition_policy_ok (ctx:auth_context) (t:secure_transition) : bool =
+let transition_policy_ok (ctx:auth_context) (t:secure_transition) : bool =
   allowed_transition ctx t && valid_transition t
 
-let rec secure_action_result (ctx:auth_context) (needed:capability) (guard:state_guard) : policy_result =
+let secure_action_result (ctx:auth_context) (needed:capability) (guard:state_guard) : policy_result =
   enforce_policy ctx needed guard
 
-let rec guard_defensive_check (guard:state_guard) : bool =
+let guard_defensive_check (guard:state_guard) : bool =
   guard.require_auth || guard.require_capability || guard.deny_on_failure
 
-let rec principal_capability_map (ctx:auth_context) : nat =
+let principal_capability_map (ctx:auth_context) : nat =
   list_length ctx.capabilities
 
-let rec deny_by_default (ctx:auth_context) (needed:capability) : policy_result =
+let deny_by_default (ctx:auth_context) (needed:capability) : policy_result =
   if principal_has_capability ctx needed then Allowed else Denied "deny-by-default"
 
-let rec security_roundtrip (ctx:auth_context) (needed:capability) (guard:state_guard) : policy_result =
+let security_roundtrip (ctx:auth_context) (needed:capability) (guard:state_guard) : policy_result =
   enforce_policy ctx needed guard
 
-let rec transition_ledger (state:protocol_state) : list audit_record =
+let transition_ledger (state:protocol_state) : list audit_record =
   state.audited
 
-let rec protocol_policy_state (state:protocol_state) : bool =
+let protocol_policy_state (state:protocol_state) : bool =
   secure_protocol_state state
 
-let rec assert_secure_state (state:protocol_state) : bool =
+let assert_secure_state (state:protocol_state) : bool =
   secure_protocol_state state
 
-let rec grant_and_authorize (ctx:auth_context) (cap:capability) : policy_result =
+let grant_and_authorize (ctx:auth_context) (cap:capability) : policy_result =
   let ctx' = grant_capability ctx cap in
   if authorization_grants ctx' cap then Allowed else Denied "authorization failed"
 
-let rec recheck_capability (ctx:auth_context) (cap:capability) : bool =
+let recheck_capability (ctx:auth_context) (cap:capability) : bool =
   authorization_grants ctx cap
 
-let rec secure_capability_bundle (ctx:auth_context) : list capability =
+let secure_capability_bundle (ctx:auth_context) : list capability =
   ctx.capabilities
 
-let rec validated_capability_context (ctx:auth_context) : bool =
+let validated_capability_context (ctx:auth_context) : bool =
   principal_is_known ctx && capability_binding_ok ctx
 
-let rec capability_policy_fails_closed (ctx:auth_context) (needed:capability) : policy_result =
+let capability_policy_fails_closed (ctx:auth_context) (needed:capability) : policy_result =
   if validated_capability_context ctx && authorization_grants ctx needed then Allowed else Denied "fail-closed"
 
-let rec effective_policy (ctx:auth_context) (needed:capability) : policy_result =
+let effective_policy (ctx:auth_context) (needed:capability) : policy_result =
   if valid_principal ctx.principal then enforce_policy ctx needed default_guard else Denied "principal invalid"
 
-let rec policy_result_ok (r:policy_result) : bool =
+let policy_result_ok (r:policy_result) : bool =
   match r with
   | Allowed -> true
   | Denied _ -> false
 
-let rec deny_if_invalid (ctx:auth_context) (needed:capability) : policy_result =
+let deny_if_invalid (ctx:auth_context) (needed:capability) : policy_result =
   if valid_principal ctx.principal then enforce_policy ctx needed default_guard else Denied "invalid context"
 
-let rec capability_limit_ok (cap:resource_cap) : bool =
+let capability_limit_ok (cap:resource_cap) : bool =
   cap.max_calls > 0 && cap.max_seconds >= 0 && cap.max_bytes >= 0
 
-let rec default_resource_cap : resource_cap =
+let default_resource_cap : resource_cap =
   { max_calls = 100; max_bytes = 1048576; max_seconds = 60 }
 
-let rec protected_transition (ctx:auth_context) (t:secure_transition) : policy_result =
+let protected_transition (ctx:auth_context) (t:secure_transition) : policy_result =
   if valid_transition t then transition_requires t ctx else Denied "invalid transition"
 
-let rec audited_transition (state:protocol_state) (ctx:auth_context) (t:secure_transition) : protocol_state =
+let audited_transition (state:protocol_state) (ctx:auth_context) (t:secure_transition) : protocol_state =
   if allowed_transition ctx t then append_audit state (audit_event ctx.principal "transition" true) else fail_transition state ctx.principal "transition"
 
-let rec zero_capability_context : auth_context =
+let zero_capability_context : auth_context =
   { principal = "system"; capabilities = [] }
 
-let rec context_is_secure (ctx:auth_context) : bool =
+let context_is_secure (ctx:auth_context) : bool =
   valid_principal ctx.principal
 
-let rec state_is_secure (ctx:auth_context) (state:protocol_state) : bool =
+let state_is_secure (ctx:auth_context) (state:protocol_state) : bool =
   context_is_secure ctx && secure_protocol_state state
 
-let rec capability_authority (ctx:auth_context) (needed:capability) : bool =
+let capability_authority (ctx:auth_context) (needed:capability) : bool =
   authorization_grants ctx needed
 
-let rec authorization_is_fail_closed (ctx:auth_context) (needed:capability) : policy_result =
+let authorization_is_fail_closed (ctx:auth_context) (needed:capability) : policy_result =
   if capability_authority ctx needed then Allowed else Denied "fail-closed"
 
-let rec enforce_transition (ctx:auth_context) (t:secure_transition) : policy_result =
+let enforce_transition (ctx:auth_context) (t:secure_transition) : policy_result =
   transition_requires t ctx
 
-let rec resource_and_auth_ok (ctx:auth_context) (cap:resource_cap) (needed:capability) : bool =
+let resource_and_auth_ok (ctx:auth_context) (cap:resource_cap) (needed:capability) : bool =
   resource_limit_ok cap && authorization_grants ctx needed
 
-let rec secure_call_result (ctx:auth_context) (needed:capability) (cap:resource_cap) : policy_result =
+let secure_call_result (ctx:auth_context) (needed:capability) (cap:resource_cap) : policy_result =
   if resource_and_auth_ok ctx cap needed then Allowed else Denied "security policy rejected"
 
-let _ = assert (authorization_grants { principal = "alice"; capabilities = ["read"] } "read")
-let _ = assert (enforce_policy { principal = "alice"; capabilities = ["read"] } "read" default_guard = Allowed)
-let _ = assert (deny_if_not_granted { principal = "alice"; capabilities = [] } "write" = Denied "capability not granted")
-let _ = assert (resource_limit_ok default_resource_cap)
+(* Concrete end-of-module checks go through the normalizer, as in
+   ToolRegistry: SMT does not reliably reduce these small computations
+   through the policy helpers, while the normalizer evaluates them to
+   values. *)
+let _ = assert (authorization_grants { principal = "alice"; capabilities = ["read"] } "read") by (norm [delta; iota; zeta; primops])
+let _ = assert (enforce_policy { principal = "alice"; capabilities = ["read"] } "read" default_guard = Allowed) by (norm [delta; iota; zeta; primops])
+let _ = assert (deny_if_not_granted { principal = "alice"; capabilities = [] } "write" = Denied "capability not granted") by (norm [delta; iota; zeta; primops])
+let _ = assert (resource_limit_ok default_resource_cap) by (norm [delta; iota; zeta; primops])
+let _ = assert (secure_protocol_state zero_state) by (norm [delta; iota; zeta; primops])
+let _ = assert (secure_protocol_state (append_audit zero_state (audit_event "alice" "read" true))) by (norm [delta; iota; zeta; primops])
+let _ = assert (not (secure_protocol_state { step = 3; active = true; audited = [] })) by (norm [delta; iota; zeta; primops])

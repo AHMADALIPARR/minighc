@@ -11,3 +11,4 @@ cabal.sandbox.config
 *.aux
 *.eventlog
 .build/
+fstar/.fstar-cache/
